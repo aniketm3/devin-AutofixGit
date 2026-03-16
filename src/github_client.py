@@ -111,9 +111,14 @@ class GitHubClient:
         """Create labels if they don't exist, with custom colors."""
         label_colors = {
             "✓ triaged": "00FF00",  # Lime green
+            "handled": "0366D6",  # Blue
+            "awaiting-fix": "FFA500",  # Orange
             "needs-devin": "0E8A16",  # Dark green
             "needs-human-review": "FBCA04",  # Yellow
             "not-suitable": "D93F0B",  # Red
+            "devin-in-progress": "BFD4F2",  # Light blue
+            "devin-pr-opened": "0E8A16",  # Dark green
+            "devin-blocked": "D93F0B",  # Red
         }
         
         existing_labels = {label.name for label in self.repo.get_labels()}

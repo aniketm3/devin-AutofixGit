@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Main orchestrator: Fetch → Triage → Route (Devin/Human/Skip)
+Triage orchestrator: Fetch → Triage → Route → Label
+Does NOT automatically call Devin. Use send_to_devin.py for that.
 """
 
 import sys
@@ -8,7 +9,6 @@ from src.config import Config
 from src.github_client import GitHubClient
 from src.triage import TriageEngine
 from src.state_manager import StateManager
-from src.devin_client import DevinClient
 
 
 def main():
@@ -20,11 +20,6 @@ def main():
     github = GitHubClient(config.github_token, config.target_repo_owner, config.target_repo_name)
     triage = TriageEngine("openai", config.llm_api_key, config.llm_model)
     state = StateManager(config.state_file)
-    
-    # Initialize Devin client if credentials available
-    devin = None
-    if config.devin_api_key and config.devin_org_id:
-        devin = DevinClient(config.devin_api_key, config.devin_org_id)
     
     # Fetch issues
     issues = github.fetch_open_issues()
@@ -48,25 +43,10 @@ def main():
         
         # Handle routing
         if result.route == "devin":
-            # Send to Devin
-            label_map = {"devin": "needs-devin", "human": "needs-human-review", "skip": "not-suitable"}
-            labels = [label_map[result.route], "✓ triaged"]
+            # Label for Devin but don't call it yet
+            labels = ["needs-devin", "✓ triaged", "awaiting-fix-devin"]
             github.add_labels(issue.number, labels)
-            
-            if devin:
-                try:
-                    repo_url = f"https://github.com/{config.target_repo}"
-                    session = devin.create_session(
-                        issue.number, issue.title, issue.body or "",
-                        repo_url, issue.html_url
-                    )
-                    state.store_devin_session(issue.number, session.to_dict())
-                    print(f"  Created Devin session: {session.url}")
-                    github.add_labels(issue.number, ["devin-in-progress"])
-                except Exception as e:
-                    print(f"  Failed to create Devin session: {e}")
-            else:
-                print("  Devin credentials not configured - skipping automation")
+            print("  Labeled: needs-devin, awaiting-fix-devin")
         
         elif result.route == "human":
             # Generate summary and questions
@@ -92,6 +72,9 @@ def main():
             print("  Skipped (not suitable for automation)")
         
         print()
+    
+    print("\nTriage complete!")
+    print("To send 'needs-devin' issues to Devin, run: python send_to_devin.py")
 
 
 if __name__ == "__main__":
