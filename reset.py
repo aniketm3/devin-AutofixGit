@@ -109,44 +109,68 @@ def close_pull_requests(repo, confirm: bool = True) -> tuple[int, int]:
 
 
 def stop_devin_sessions() -> None:
-    """Stop all active Devin sessions."""
+    """Stop all active Devin sessions and clean up state."""
     try:
-        config = Config.from_env()
-        devin = DevinClient(config.devin_api_key, config.devin_org_id)
-        state = StateManager(config.state_file)
+        # Load only what we need for Devin operations
+        devin_api_key = os.getenv("DEVIN_API_KEY")
+        devin_org_id = os.getenv("DEVIN_ORG_ID")
+        state_file = os.getenv("STATE_FILE", "state.json")
+        
+        if not devin_api_key or not devin_org_id:
+            print("Error: DEVIN_API_KEY and DEVIN_ORG_ID environment variables are required")
+            return
+        
+        devin = DevinClient(devin_api_key, devin_org_id)
+        state = StateManager(state_file)
         
         sessions = state.state.get("devin_sessions", {})
         
         if not sessions:
-            print("No active Devin sessions found")
+            print("No Devin sessions found")
             return
+        
+        # Separate active and inactive sessions
+        active_sessions = {}
+        inactive_sessions = {}
+        
+        for issue_num_str, session_data in sessions.items():
+            if session_data['status'] in ['exit', 'error', 'suspended']:
+                inactive_sessions[issue_num_str] = session_data
+            else:
+                active_sessions[issue_num_str] = session_data
         
         print(f"Found {len(sessions)} Devin session(s)")
+        if active_sessions:
+            print(f"  Active: {len(active_sessions)}")
+        if inactive_sessions:
+            print(f"  Inactive/Suspended: {len(inactive_sessions)}")
         
-        response = input(f"\nStop all {len(sessions)} Devin sessions? (y/N): ")
+        response = input(f"\nStop active sessions and clear all from state? (y/N): ")
         if response.lower() != 'y':
-            print("Skipped stopping Devin sessions")
+            print("Aborted")
             return
         
-        print("\nStopping Devin sessions...")
+        print("\nProcessing Devin sessions...")
         
         stopped_count = 0
-        for issue_num_str, session_data in sessions.items():
+        cleared_count = 0
+        
+        # Stop active sessions
+        for issue_num_str, session_data in active_sessions.items():
             issue_num = int(issue_num_str)
             session_id = session_data["session_id"]
             
-            if session_data['status'] in ['exit', 'error', 'suspended']:
-                continue
-            
             if devin.stop_session(session_id):
-                print(f"  Stopped session for issue #{issue_num}")
+                print(f"  Stopped active session for issue #{issue_num}")
                 stopped_count += 1
-                
-                session_data['status'] = 'exit'
-                session_data['status_detail'] = 'manually_stopped'
-                state.store_devin_session(issue_num, session_data)
         
-        print(f"\nStopped {stopped_count} Devin session(s)")
+        # Clear all sessions from state
+        state.state["devin_sessions"] = {}
+        state.save()
+        cleared_count = len(sessions)
+        
+        print(f"\nStopped {stopped_count} active session(s)")
+        print(f"Cleared {cleared_count} session(s) from state")
         
     except Exception as e:
         print(f"Error stopping Devin sessions: {e}")

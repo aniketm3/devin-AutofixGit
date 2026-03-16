@@ -116,6 +116,30 @@ class DevinClient:
         data = response.json()
         return self._parse_session(data)
     
+    def stop_session(self, session_id: str) -> bool:
+        """
+        Stop/cancel a running Devin session.
+        
+        Args:
+            session_id: Devin session ID
+            
+        Returns:
+            True if successfully stopped, False otherwise
+        """
+        # Devin API requires session ID to be prefixed with "devin-"
+        devin_id = session_id if session_id.startswith("devin-") else f"devin-{session_id}"
+        
+        try:
+            response = requests.post(
+                f"{self.base_url}/organizations/{self.org_id}/sessions/{devin_id}/stop",
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to stop session {session_id}: {e}")
+            return False
+    
     def poll_until_complete(self, session_id: str, timeout: int = 1800, 
                            poll_interval: int = 30) -> DevinSession:
         """
