@@ -29,8 +29,9 @@ def main():
     for issue in issues:
         print(f"Issue #{issue.number}: {issue.title}")
         
-        # Skip if already triaged
-        if state.is_issue_triaged(issue.number):
+        # Check if already triaged by looking at labels (source of truth)
+        current_labels = [label.name for label in issue.labels]
+        if "✓ triaged" in current_labels:
             print("  Already triaged\n")
             continue
         
