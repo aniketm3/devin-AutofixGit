@@ -57,8 +57,8 @@ Please review the changes and merge if appropriate.
 """
                     github.create_comment(issue_num, comment)
                     github.remove_labels(issue_num, ["devin-in-progress"])
-                    github.add_labels(issue_num, ["devin-pr-opened", "✓ handled-devin"])
-                    print("  Updated GitHub with PR link and 'handled-devin' label")
+                    github.add_labels(issue_num, ["devin-awaiting-user"])
+                    print("  Updated labels: devin-in-progress → devin-awaiting-user")
                 else:
                     print("  ✓ Completed but no PR created")
             

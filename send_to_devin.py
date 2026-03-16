@@ -63,11 +63,12 @@ def main():
             # Store session in state
             state.store_devin_session(issue.number, session.to_dict())
             
-            # Update GitHub labels
-            github.remove_labels(issue.number, ["awaiting-fix"])
+            # Update GitHub labels: remove awaiting-fix-devin, add devin-in-progress
+            github.remove_labels(issue.number, ["awaiting-fix-devin"])
             github.add_labels(issue.number, ["devin-in-progress"])
             
             print(f"Created Devin session: {session.url}")
+            print(f"  Updated labels: awaiting-fix-devin → devin-in-progress")
             
         except Exception as e:
             print(f"Error: Failed to create Devin session: {e}")
