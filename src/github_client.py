@@ -117,6 +117,8 @@ class GitHubClient:
             "needs-human-review": "FBCA04",  # Yellow
             "not-suitable": "D93F0B",  # Red
             "devin-in-progress": "BFD4F2",  # Light blue
+            "devin-awaiting-feedback": "FFA500",  # Orange
+            "devin-awaiting-user": "0E8A16",  # Dark green
             "devin-pr-opened": "0E8A16",  # Dark green
             "devin-blocked": "D93F0B",  # Red
         }

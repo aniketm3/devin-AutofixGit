@@ -47,12 +47,13 @@ def main():
             # Label for Devin but don't call it yet
             labels = ["needs-devin", "✓ triaged", "awaiting-fix-devin"]
             github.add_labels(issue.number, labels)
-            print("  Labeled: needs-devin, awaiting-fix-devin")
+            print("  Labeled: needs-devin, ✓ triaged, awaiting-fix-devin")
         
         elif result.route == "human":
             # Generate summary and questions
             labels = ["needs-human-review", "✓ triaged"]
             github.add_labels(issue.number, labels)
+            print(f"  Labeled: needs-human-review, ✓ triaged")
             
             print("  Generating review summary...")
             summary = triage.generate_human_review_summary(issue)
