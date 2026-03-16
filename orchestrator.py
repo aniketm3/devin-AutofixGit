@@ -40,10 +40,11 @@ def main():
         print(f"  Urgency: {result.urgency_score:.1f}, Fixability: {result.fixability_score:.1f}")
         print(f"  Route: {result.route}")
         
-        # Add GitHub label
+        # Add GitHub labels
         label_map = {"devin": "needs-devin", "human": "needs-human-review", "skip": "not-suitable"}
-        github.add_labels(issue.number, [label_map[result.route]])
-        print(f"  Labeled: {label_map[result.route]}\n")
+        labels_to_add = [label_map[result.route], "✓ triaged"]
+        github.add_labels(issue.number, labels_to_add)
+        print(f"  Labeled: {', '.join(labels_to_add)}\n")
 
 
 if __name__ == "__main__":

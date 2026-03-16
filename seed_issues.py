@@ -48,7 +48,6 @@ TypeError: Cannot read property 'id' of undefined
 
 ## Priority
 High - blocking user authentication""",
-        "labels": ["bug", "critical", "backend"],
     },
     {
         "title": "Add input validation to user registration form",
@@ -73,7 +72,6 @@ The user registration form currently accepts invalid email formats and weak pass
 ## Files to Modify
 - `src/components/RegistrationForm.tsx`
 - `src/utils/validation.ts`""",
-        "labels": ["enhancement", "frontend", "security"],
     },
     {
         "title": "Database connection pool exhausted under load",
@@ -100,7 +98,6 @@ Increase pool size and implement proper connection cleanup
 
 ## Impact
 High - causes production outages during peak traffic""",
-        "labels": ["bug", "performance", "database"],
     },
     {
         "title": "TypeError in data processing pipeline",
@@ -126,7 +123,6 @@ TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'
 
 ## Suggested Fix
 Add null check before arithmetic operations""",
-        "labels": ["bug", "data-processing"],
     },
     {
         "title": "Add dark mode support to application",
@@ -150,7 +146,6 @@ Mockups available in Figma (link TBD)
 
 ## Priority
 Low - nice to have feature""",
-        "labels": ["enhancement", "ui", "feature-request"],
     },
     {
         "title": "Redesign homepage layout and navigation",
@@ -176,7 +171,6 @@ Estimated 2-3 sprints
 
 ## Notes
 Requires collaboration with design team and product management.""",
-        "labels": ["design", "enhancement", "needs-discussion"],
     },
     {
         "title": "Update API documentation for v2 endpoints",
@@ -197,7 +191,6 @@ API documentation is outdated and missing information about v2 endpoints.
 
 ## Priority
 Medium - developers are asking questions about undocumented features""",
-        "labels": ["documentation"],
     },
     {
         "title": "Memory leak in WebSocket connection handler",
@@ -227,7 +220,6 @@ WebSocket event handlers not removed on disconnect
 
 ## Impact
 Critical - requires daily server restarts in production""",
-        "labels": ["bug", "critical", "memory-leak", "websocket"],
     },
     {
         "title": "Implement rate limiting for API endpoints",
@@ -254,7 +246,6 @@ Add rate limiting to prevent API abuse and DDoS attacks.
 ## Testing
 - Unit tests for rate limiter
 - Load testing to verify limits""",
-        "labels": ["security", "enhancement", "backend"],
     },
     {
         "title": "Fix broken image uploads on mobile Safari",
@@ -287,7 +278,6 @@ Failed to load resource: the server responded with a status of 400
 
 ## Suspected Issue
 MIME type or CORS issue specific to mobile Safari""",
-        "labels": ["bug", "mobile", "frontend"],
     },
 ]
 
@@ -318,12 +308,10 @@ def create_issues(repo_name: str, count: int, github_token: str) -> None:
             try:
                 issue = repo.create_issue(
                     title=template["title"],
-                    body=template["body"],
-                    labels=template["labels"]
+                    body=template["body"]
                 )
                 created_issues.append(issue)
                 print(f"[{i}/{count}] Created issue #{issue.number}: {template['title']}")
-                print(f"  Labels: {', '.join(template['labels'])}")
                 print(f"  URL: {issue.html_url}\n")
                 
             except GithubException as e:

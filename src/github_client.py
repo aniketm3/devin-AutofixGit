@@ -92,17 +92,39 @@ class GitHubClient:
     
     def add_labels(self, issue_number: int, labels: List[str]) -> None:
         """
-        Add labels to an issue.
+        Add labels to an issue. Creates labels if they don't exist.
         
         Args:
             issue_number: Issue number
             labels: List of label names to add
         """
         try:
+            # Ensure special labels exist with custom colors
+            self._ensure_labels_exist(labels)
+            
             issue = self.repo.get_issue(issue_number)
             issue.add_to_labels(*labels)
         except GithubException as e:
             raise Exception(f"Failed to add labels to issue #{issue_number}: {e.data.get('message', str(e))}")
+    
+    def _ensure_labels_exist(self, labels: List[str]) -> None:
+        """Create labels if they don't exist, with custom colors."""
+        label_colors = {
+            "✓ triaged": "00FF00",  # Lime green
+            "needs-devin": "0E8A16",  # Dark green
+            "needs-human-review": "FBCA04",  # Yellow
+            "not-suitable": "D93F0B",  # Red
+        }
+        
+        existing_labels = {label.name for label in self.repo.get_labels()}
+        
+        for label_name in labels:
+            if label_name not in existing_labels:
+                color = label_colors.get(label_name, "EDEDED")  # Default gray
+                try:
+                    self.repo.create_label(label_name, color)
+                except GithubException:
+                    pass  # Label might have been created by another process
     
     def remove_labels(self, issue_number: int, labels: List[str]) -> None:
         """
