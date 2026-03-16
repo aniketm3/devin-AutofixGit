@@ -163,3 +163,39 @@ Respond ONLY with valid JSON in this exact format:
             return "human"
         else:
             return "skip"
+    
+    def generate_human_review_summary(self, issue: Issue) -> str:
+        """
+        Generate a summary with questions for human review.
+        
+        Args:
+            issue: Issue to analyze
+            
+        Returns:
+            Formatted summary as markdown
+        """
+        prompt = f"""Analyze this GitHub issue and provide a helpful summary for a human reviewer.
+
+Issue: #{issue.number} - {issue.title}
+Body: {(issue.body or '')[:1000]}
+
+Provide:
+1. Brief summary (2-3 sentences)
+2. Potential solutions (2-3 options)
+3. Clarifying questions to ask the issue author (2-3 questions)
+
+Format as markdown for posting as a GitHub comment.
+"""
+        
+        if self.provider == "openai":
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful engineering assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.5,
+            )
+            return response.choices[0].message.content
+        
+        return "Error generating summary"
