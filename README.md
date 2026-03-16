@@ -58,6 +58,27 @@ export $(cat .env | xargs)
 
 ## Usage
 
+### Run the Orchestrator
+
+The main orchestrator fetches issues, triages them with LLM, and labels them based on routing decisions:
+
+```bash
+# Make sure environment variables are loaded
+export $(grep -v '^#' .env | xargs)
+
+# Run the orchestrator
+python orchestrator.py
+```
+
+The orchestrator will:
+1. Fetch all open issues from the target repo
+2. Triage each issue using LLM (urgency + fixability scores)
+3. Route issues to: Devin, human review, or skip
+4. Add GitHub labels: `needs-devin`, `needs-human-review`, or `not-suitable-for-devin`
+5. Save state to `state.json` (so re-runs skip already-triaged issues)
+
+**Note**: You need an OpenAI API key in your `.env` file for the triage engine to work.
+
 ### Seed Demo Issues
 
 Create test issues in the target repository:
@@ -109,22 +130,42 @@ The seeding script includes 10 diverse issue templates:
 
 ```
 devin-AutofixGit/
-├── seed_issues.py          # Create demo issues
-├── clear_issues.py         # Close all issues
-├── requirements.txt        # Python dependencies
-├── .env.example           # Environment variable template
-├── .env                   # Your credentials (gitignored)
-└── README.md              # This file
+├── src/
+│   ├── __init__.py
+│   ├── config.py              # Configuration management
+│   ├── github_client.py       # GitHub API interface
+│   ├── triage.py              # LLM-based issue scoring
+│   └── state_manager.py       # State persistence
+├── orchestrator.py            # Main automation pipeline
+├── seed_issues.py             # Create demo issues
+├── clear_issues.py            # Close all issues
+├── requirements.txt           # Python dependencies
+├── .env.example              # Environment variable template
+├── .env                      # Your credentials (gitignored)
+├── state.json                # Runtime state (gitignored)
+└── README.md                 # This file
 ```
+
+## How It Works
+
+1. **Fetch Issues**: GitHub client retrieves all open issues
+2. **Triage**: LLM analyzes each issue and scores:
+   - **Urgency** (0-10): How critical is the issue?
+   - **Fixability** (0-10): Can Devin fix it autonomously?
+3. **Route**: Based on scores:
+   - High urgency + high fixability → `needs-devin`
+   - Medium scores → `needs-human-review`
+   - Low scores → `not-suitable-for-devin`
+4. **Label**: GitHub labels applied automatically
+5. **State**: Results saved to `state.json` to avoid re-triaging
 
 ## Next Steps
 
-Future components to be implemented:
-- `github_client.py` - GitHub API interface
-- `triage.py` - Issue scoring and routing
-- `devin_client.py` - Devin API interface
-- `orchestrator.py` - Main automation pipeline
-- `config.py` - Configuration management
+Future enhancements:
+- `devin_client.py` - Devin API integration for actually sending issues to Devin
+- Devin session polling and status tracking
+- PR link posting back to GitHub issues
+- Webhook-based updates instead of polling
 
 ## Troubleshooting
 

@@ -18,7 +18,7 @@ warnings.filterwarnings('ignore', category=Warning)
 from github import Github, GithubException, Auth
 
 
-# Issue templates with varying urgency and fixability
+# Issue templates for testing
 ISSUE_TEMPLATES = [
     {
         "title": "Login endpoint returns 500 error on valid credentials",
@@ -49,8 +49,6 @@ TypeError: Cannot read property 'id' of undefined
 ## Priority
 High - blocking user authentication""",
         "labels": ["bug", "critical", "backend"],
-        "urgency": 9,
-        "fixability": 8,
     },
     {
         "title": "Add input validation to user registration form",
@@ -76,8 +74,6 @@ The user registration form currently accepts invalid email formats and weak pass
 - `src/components/RegistrationForm.tsx`
 - `src/utils/validation.ts`""",
         "labels": ["enhancement", "frontend", "security"],
-        "urgency": 6,
-        "fixability": 8,
     },
     {
         "title": "Database connection pool exhausted under load",
@@ -105,8 +101,6 @@ Increase pool size and implement proper connection cleanup
 ## Impact
 High - causes production outages during peak traffic""",
         "labels": ["bug", "performance", "database"],
-        "urgency": 8,
-        "fixability": 7,
     },
     {
         "title": "TypeError in data processing pipeline",
@@ -133,8 +127,6 @@ TypeError: unsupported operand type(s) for +: 'NoneType' and 'int'
 ## Suggested Fix
 Add null check before arithmetic operations""",
         "labels": ["bug", "data-processing"],
-        "urgency": 7,
-        "fixability": 9,
     },
     {
         "title": "Add dark mode support to application",
@@ -159,8 +151,6 @@ Mockups available in Figma (link TBD)
 ## Priority
 Low - nice to have feature""",
         "labels": ["enhancement", "ui", "feature-request"],
-        "urgency": 3,
-        "fixability": 4,
     },
     {
         "title": "Redesign homepage layout and navigation",
@@ -187,8 +177,6 @@ Estimated 2-3 sprints
 ## Notes
 Requires collaboration with design team and product management.""",
         "labels": ["design", "enhancement", "needs-discussion"],
-        "urgency": 4,
-        "fixability": 2,
     },
     {
         "title": "Update API documentation for v2 endpoints",
@@ -210,8 +198,6 @@ API documentation is outdated and missing information about v2 endpoints.
 ## Priority
 Medium - developers are asking questions about undocumented features""",
         "labels": ["documentation"],
-        "urgency": 5,
-        "fixability": 7,
     },
     {
         "title": "Memory leak in WebSocket connection handler",
@@ -242,8 +228,6 @@ WebSocket event handlers not removed on disconnect
 ## Impact
 Critical - requires daily server restarts in production""",
         "labels": ["bug", "critical", "memory-leak", "websocket"],
-        "urgency": 9,
-        "fixability": 6,
     },
     {
         "title": "Implement rate limiting for API endpoints",
@@ -271,8 +255,6 @@ Add rate limiting to prevent API abuse and DDoS attacks.
 - Unit tests for rate limiter
 - Load testing to verify limits""",
         "labels": ["security", "enhancement", "backend"],
-        "urgency": 7,
-        "fixability": 7,
     },
     {
         "title": "Fix broken image uploads on mobile Safari",
@@ -306,8 +288,6 @@ Failed to load resource: the server responded with a status of 400
 ## Suspected Issue
 MIME type or CORS issue specific to mobile Safari""",
         "labels": ["bug", "mobile", "frontend"],
-        "urgency": 6,
-        "fixability": 8,
     },
 ]
 
@@ -343,7 +323,7 @@ def create_issues(repo_name: str, count: int, github_token: str) -> None:
                 )
                 created_issues.append(issue)
                 print(f"[{i}/{count}] Created issue #{issue.number}: {template['title']}")
-                print(f"  Urgency: {template['urgency']}/10, Fixability: {template['fixability']}/10")
+                print(f"  Labels: {', '.join(template['labels'])}")
                 print(f"  URL: {issue.html_url}\n")
                 
             except GithubException as e:
@@ -351,9 +331,7 @@ def create_issues(repo_name: str, count: int, github_token: str) -> None:
                 print(f"  Error: {e.data.get('message', str(e))}\n")
         
         print(f"\nSuccessfully created {len(created_issues)} issues")
-        print(f"Issue distribution:")
-        print(f"  High urgency (7-10): {sum(1 for t in issues_to_create if t['urgency'] >= 7)}")
-        print(f"  High fixability (7-10): {sum(1 for t in issues_to_create if t['fixability'] >= 7)}")
+        print(f"Ready for triage with LLM")
         
     except GithubException as e:
         print(f"Error accessing repository: {e.data.get('message', str(e))}")
