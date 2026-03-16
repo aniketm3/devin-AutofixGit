@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """
-Reset GitHub repository by closing issues and/or pull requests.
+Reset GitHub repository by closing issues and/or pull requests, and optionally stop Devin sessions.
 
 Usage:
     python reset.py --issues              # Close only issues
     python reset.py --prs                 # Close only PRs
     python reset.py --all                 # Close both issues and PRs
+    python reset.py --all --devin         # Close issues/PRs and stop Devin sessions
     python reset.py --all --repo owner/repo
 """
 
@@ -17,6 +18,9 @@ import warnings
 warnings.filterwarnings('ignore', category=Warning)
 
 from github import Github, GithubException, Auth
+from src.config import Config
+from src.devin_client import DevinClient
+from src.state_manager import StateManager
 
 
 def close_issues(repo, confirm: bool = True) -> tuple[int, int]:
@@ -104,8 +108,52 @@ def close_pull_requests(repo, confirm: bool = True) -> tuple[int, int]:
     return closed_count, failed_count
 
 
+def stop_devin_sessions() -> None:
+    """Stop all active Devin sessions."""
+    try:
+        config = Config.from_env()
+        devin = DevinClient(config.devin_api_key, config.devin_org_id)
+        state = StateManager(config.state_file)
+        
+        sessions = state.state.get("devin_sessions", {})
+        
+        if not sessions:
+            print("No active Devin sessions found")
+            return
+        
+        print(f"Found {len(sessions)} Devin session(s)")
+        
+        response = input(f"\nStop all {len(sessions)} Devin sessions? (y/N): ")
+        if response.lower() != 'y':
+            print("Skipped stopping Devin sessions")
+            return
+        
+        print("\nStopping Devin sessions...")
+        
+        stopped_count = 0
+        for issue_num_str, session_data in sessions.items():
+            issue_num = int(issue_num_str)
+            session_id = session_data["session_id"]
+            
+            if session_data['status'] in ['exit', 'error', 'suspended']:
+                continue
+            
+            if devin.stop_session(session_id):
+                print(f"  Stopped session for issue #{issue_num}")
+                stopped_count += 1
+                
+                session_data['status'] = 'exit'
+                session_data['status_detail'] = 'manually_stopped'
+                state.store_devin_session(issue_num, session_data)
+        
+        print(f"\nStopped {stopped_count} Devin session(s)")
+        
+    except Exception as e:
+        print(f"Error stopping Devin sessions: {e}")
+
+
 def reset_repository(repo_name: str, github_token: str, close_issues_flag: bool, 
-                     close_prs_flag: bool, close_all_flag: bool) -> None:
+                     close_prs_flag: bool, close_all_flag: bool, stop_devin_flag: bool) -> None:
     """
     Reset repository by closing issues and/or pull requests.
     
@@ -115,6 +163,7 @@ def reset_repository(repo_name: str, github_token: str, close_issues_flag: bool,
         close_issues_flag: If True, close all issues
         close_prs_flag: If True, close all PRs
         close_all_flag: If True, close both issues and PRs
+        stop_devin_flag: If True, stop all Devin sessions
     """
     try:
         # Initialize GitHub client
@@ -127,9 +176,18 @@ def reset_repository(repo_name: str, github_token: str, close_issues_flag: bool,
         # Determine what to close
         should_close_issues = close_issues_flag or close_all_flag
         should_close_prs = close_prs_flag or close_all_flag
+        should_stop_devin = stop_devin_flag or close_all_flag
         
         total_closed = 0
         total_failed = 0
+        
+        # Stop Devin sessions first if requested or if --all flag is used
+        if should_stop_devin:
+            print("=" * 50)
+            print("DEVIN SESSIONS")
+            print("=" * 50)
+            stop_devin_sessions()
+            print()
         
         # Close issues
         if should_close_issues:
@@ -179,12 +237,15 @@ def main():
 Examples:
   python reset.py --issues                           # Close only issues
   python reset.py --prs                              # Close only PRs
-  python reset.py --all                              # Close both issues and PRs
+  python reset.py --all                              # Close issues, PRs, and stop Devin sessions
+  python reset.py --devin                            # Only stop Devin sessions
   python reset.py --all --repo owner/repo            # Specify repository
   
 Environment Variables:
   GITHUB_TOKEN    GitHub personal access token (required)
   TARGET_REPO     Default repository in format "owner/repo"
+  DEVIN_API_KEY   Devin API key (required if using --devin)
+  DEVIN_ORG_ID    Devin organization ID (required if using --devin)
         """
     )
     
@@ -212,39 +273,52 @@ Environment Variables:
         help="Close both issues and pull requests"
     )
     
+    parser.add_argument(
+        "--devin",
+        action="store_true",
+        help="Stop all active Devin sessions"
+    )
+    
     args = parser.parse_args()
     
     # Validate that at least one action is specified
-    if not (args.issues or args.prs or args.all):
-        parser.error("Must specify at least one action: --issues, --prs, or --all")
+    if not (args.issues or args.prs or args.all or args.devin):
+        parser.error("Must specify at least one action: --issues, --prs, --all, or --devin")
     
-    # Get GitHub token from environment
-    github_token = os.getenv("GITHUB_TOKEN")
-    if not github_token:
-        print("Error: GITHUB_TOKEN environment variable not set")
-        print("\nTo fix this:")
-        print("  1. Create a GitHub Personal Access Token at:")
-        print("     https://github.com/settings/tokens/new")
-        print("  2. Grant 'repo' or 'public_repo' scope")
-        print("  3. Export the token: export GITHUB_TOKEN='your_token_here'")
-        exit(1)
+    # Get GitHub token from environment (only required if not just stopping Devin)
+    github_token = None
+    repo_name = None
     
-    # Get repository name
-    repo_name = args.repo or os.getenv("TARGET_REPO")
-    if not repo_name:
-        print("Error: Repository not specified")
-        print("\nProvide repository using either:")
-        print("  --repo flag: python reset.py --repo owner/repo")
-        print("  TARGET_REPO env var: export TARGET_REPO='owner/repo'")
-        exit(1)
-    
-    # Validate repository format
-    if "/" not in repo_name:
-        print(f"Error: Invalid repository format: {repo_name}")
-        print('  Expected format: "owner/repo" (e.g., "aniketm3/demo-targetIssues")')
-        exit(1)
-    
-    reset_repository(repo_name, github_token, args.issues, args.prs, args.all)
+    if args.issues or args.prs or args.all:
+        github_token = os.getenv("GITHUB_TOKEN")
+        if not github_token:
+            print("Error: GITHUB_TOKEN environment variable not set")
+            print("\nTo fix this:")
+            print("  1. Create a GitHub Personal Access Token at:")
+            print("     https://github.com/settings/tokens/new")
+            print("  2. Grant 'repo' or 'public_repo' scope")
+            print("  3. Export the token: export GITHUB_TOKEN='your_token_here'")
+            exit(1)
+        
+        # Get repository name
+        repo_name = args.repo or os.getenv("TARGET_REPO")
+        if not repo_name:
+            print("Error: Repository not specified")
+            print("\nProvide repository using either:")
+            print("  --repo flag: python reset.py --repo owner/repo")
+            print("  TARGET_REPO env var: export TARGET_REPO='owner/repo'")
+            exit(1)
+        
+        # Validate repository format
+        if "/" not in repo_name:
+            print(f"Error: Invalid repository format: {repo_name}")
+            print('  Expected format: "owner/repo" (e.g., "aniketm3/demo-targetIssues")')
+            exit(1)
+        
+        reset_repository(repo_name, github_token, args.issues, args.prs, args.all, args.devin)
+    elif args.devin:
+        # Just stop Devin sessions
+        stop_devin_sessions()
 
 
 if __name__ == "__main__":
