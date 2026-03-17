@@ -36,33 +36,13 @@ def main():
             # Update state
             state.store_devin_session(issue_num, session.to_dict())
             
-            # Check if completed
-            if session.status == "exit" or (session.status == "running" and session.status_detail == "finished"):
-                if session.pull_requests:
-                    # Devin created a PR!
-                    pr = session.pull_requests[0]
-                    print(f"  ✓ PR created: {pr.pr_url}")
-                    
-                    # Post PR link to issue
-                    comment = f"""## ✅ Devin completed this issue
-
-Devin has analyzed and fixed this issue. A pull request has been created:
-
-**PR**: {pr.pr_url}
-
-Please review the changes and merge if appropriate.
-
----
-*Devin session: {session.url}*
-"""
-                    github.create_comment(issue_num, comment)
-                    github.remove_labels(issue_num, ["devin-in-progress"])
-                    github.add_labels(issue_num, ["devin-awaiting-user"])
-                    print("  Updated labels: devin-in-progress → devin-awaiting-user")
-                else:
-                    print("  ✓ Completed but no PR created")
+            # Display PR info if exists
+            if session.pull_requests:
+                pr = session.pull_requests[0]
+                print(f"  PR: {pr.pr_url}")
             
-            elif session.status in ["error", "suspended"]:
+            # Check for errors or blocked status
+            if session.status in ["error", "suspended"]:
                 # Devin failed or got blocked
                 print(f"  ✗ Session {session.status}: {session.status_detail}")
                 

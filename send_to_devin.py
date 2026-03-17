@@ -31,6 +31,10 @@ def main():
     # Filter for issues that need Devin and haven't been fixed yet
     issues_to_fix = []
     for issue in issues:
+        # Skip pull requests
+        if issue.pull_request:
+            continue
+        
         labels = [label.name for label in issue.labels]
         if "needs-devin" in labels and "awaiting-fix-devin" in labels:
             issues_to_fix.append(issue)
@@ -63,11 +67,11 @@ def main():
             # Store session in state
             state.store_devin_session(issue.number, session.to_dict())
             
+            print(f"Created Devin session: {session.url}")
+            
             # Update GitHub labels: remove awaiting-fix-devin, add devin-in-progress
             github.remove_labels(issue.number, ["awaiting-fix-devin"])
             github.add_labels(issue.number, ["devin-in-progress"])
-            
-            print(f"Created Devin session: {session.url}")
             print(f"  Updated labels: awaiting-fix-devin → devin-in-progress")
             
         except Exception as e:
