@@ -29,12 +29,14 @@ import argparse
 from flask import Flask, request, jsonify
 from src.config import Config
 from src.github_client import GitHubClient
+from src.state_manager import StateManager
 
 app = Flask(__name__)
 
 # Global config (loaded on startup)
 config = None
 github_client = None
+state_manager = None
 webhook_secret = None
 
 
@@ -120,102 +122,77 @@ Please review the changes and merge if appropriate.
         return jsonify({'error': str(e)}), 500
 
 
-def handle_pr_comment_on_issue(payload):
-    """Handle comments on PR conversation (comes through as issue_comment)."""
+def handle_pr_feedback(payload, source="comment"):
+    """Handle feedback on PRs (comments or reviews) - unified handler."""
     import re
     
-    issue = payload.get('issue', {})
-    comment = payload.get('comment', {})
-    comment_user = comment.get('user', {})
-    pr_number = issue.get('number')
-    
-    # Skip bot comments
-    if comment_user.get('type') == 'Bot':
-        return jsonify({'message': 'Bot comment ignored'}), 200
-    
-    # Get PR to find linked issue
-    try:
+    # Extract PR info based on source
+    if source == "comment":
+        # Comment on PR conversation (issue_comment event)
+        issue = payload.get('issue', {})
+        pr_number = issue.get('number')
+        comment = payload.get('comment', {})
+        comment_user = comment.get('user', {})
+        
+        # Get PR to find linked issue
         pr = github_client.repo.get_pull(pr_number)
         pr_body = pr.body or ''
-        
-        # Try to find linked issue number in PR body
-        issue_match = re.search(r'(?:fix|fixes|close|closes|resolve|resolves)\s+#(\d+)', pr_body, re.IGNORECASE)
-        
-        if not issue_match:
-            return jsonify({'message': 'No linked issue found in PR'}), 200
-        
-        issue_number = int(issue_match.group(1))
-        
-        # Get the issue to check its labels
-        linked_issue = github_client.get_issue(issue_number)
-        labels = [label.name for label in linked_issue.labels]
-        
-        # Only handle if issue has devin-awaiting-feedback
-        if 'devin-awaiting-feedback' not in labels:
-            return jsonify({'message': 'Issue not awaiting Devin feedback'}), 200
-        
-        # Remove devin-awaiting-feedback and ✓ triaged, add awaiting-fix-devin
-        github_client.remove_labels(issue_number, ["devin-awaiting-feedback", "✓ triaged"])
-        github_client.add_labels(issue_number, ["awaiting-fix-devin"])
-        
-        print(f"✓ PR #{pr_number} received feedback for issue #{issue_number}")
-        print(f"  Comment by: {comment_user.get('login')}")
-        print(f"  Updated labels: devin-awaiting-feedback → awaiting-fix-devin")
-        print(f"  Issue will be re-triaged on next orchestrator run")
-        
-        return jsonify({
-            'message': 'Labels updated for re-triage',
-            'issue_number': issue_number,
-            'pr_number': pr_number
-        }), 200
-        
-    except Exception as e:
-        print(f"✗ Error handling PR comment: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-def handle_pr_comment(payload):
-    """Handle PR review comments (code review comments)."""
-    import re
+    else:
+        # PR review comment (pull_request_review_comment or pull_request_review event)
+        pr = payload.get('pull_request', {})
+        pr_number = pr.get('number')
+        pr_body = pr.get('body', '')
+        comment = payload.get('comment') or payload.get('review', {})
+        comment_user = comment.get('user', {})
     
-    pr = payload.get('pull_request', {})
-    comment = payload.get('comment') or payload.get('review', {})
-    comment_user = comment.get('user', {})
-    comment_body = comment.get('body', '')
+    print(f"[PR Feedback] Processing {source} on PR #{pr_number}")
     
     # Skip bot comments
     if comment_user.get('type') == 'Bot':
+        print(f"[PR Feedback] Skipping bot comment")
         return jsonify({'message': 'Bot comment ignored'}), 200
-    
-    # Get PR body to find linked issue
-    pr_body = pr.get('body', '')
-    pr_number = pr.get('number')
     
     # Try to find linked issue number in PR body
     issue_match = re.search(r'(?:fix|fixes|close|closes|resolve|resolves)\s+#(\d+)', pr_body, re.IGNORECASE)
     
     if not issue_match:
+        print(f"[PR Feedback] No linked issue found in PR body")
         return jsonify({'message': 'No linked issue found in PR'}), 200
     
     issue_number = int(issue_match.group(1))
+    print(f"[PR Feedback] Found linked issue #{issue_number}")
     
     # Get the issue to check its labels
     try:
-        issue = github_client.get_issue(issue_number)
-        labels = [label.name for label in issue.labels]
+        linked_issue = github_client.get_issue(issue_number)
+        labels = [label.name for label in linked_issue.labels]
+        print(f"[PR Feedback] Issue #{issue_number} labels: {labels}")
         
-        # Only handle if issue has devin-awaiting-feedback
-        if 'devin-awaiting-feedback' not in labels:
-            return jsonify({'message': 'Issue not awaiting Devin feedback'}), 200
+        # Only handle if issue has devin-awaiting-feedback or devin-in-progress
+        if 'devin-awaiting-feedback' not in labels and 'devin-in-progress' not in labels:
+            print(f"[PR Feedback] Issue not in Devin workflow")
+            return jsonify({'message': 'Issue not in Devin workflow'}), 200
         
-        # Remove devin-awaiting-feedback and ✓ triaged, add awaiting-fix-devin
-        github_client.remove_labels(issue_number, ["devin-awaiting-feedback", "✓ triaged"])
+        # Remove devin labels and ✓ triaged, add awaiting-fix-devin
+        labels_to_remove = ["✓ triaged"]
+        if 'devin-awaiting-feedback' in labels:
+            labels_to_remove.append("devin-awaiting-feedback")
+        if 'devin-in-progress' in labels:
+            labels_to_remove.append("devin-in-progress")
+        
+        github_client.remove_labels(issue_number, labels_to_remove)
         github_client.add_labels(issue_number, ["awaiting-fix-devin"])
+        
+        # Clear the old Devin session from state so a new one can be created
+        if state_manager and str(issue_number) in state_manager.state.get("devin_sessions", {}):
+            del state_manager.state["devin_sessions"][str(issue_number)]
+            state_manager.save()
+            print(f"[PR Feedback] Cleared old Devin session for issue #{issue_number}")
         
         print(f"✓ PR #{pr_number} received feedback for issue #{issue_number}")
         print(f"  Comment by: {comment_user.get('login')}")
-        print(f"  Updated labels: devin-awaiting-feedback → awaiting-fix-devin")
-        print(f"  Issue will be re-triaged on next orchestrator run")
+        print(f"  Updated labels to awaiting-fix-devin")
+        print(f"  Issue will be re-triaged and re-sent to Devin")
         
         return jsonify({
             'message': 'Labels updated for re-triage',
@@ -224,7 +201,7 @@ def handle_pr_comment(payload):
         }), 200
         
     except Exception as e:
-        print(f"✗ Error handling PR comment: {e}")
+        print(f"✗ Error handling PR feedback: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -255,9 +232,9 @@ def webhook():
     if action not in ['created', 'submitted']:
         return jsonify({'message': 'Action ignored'}), 200
     
-    # Handle PR comments differently
+    # Handle PR review comments
     if event_type in ['pull_request_review_comment', 'pull_request_review']:
-        return handle_pr_comment(payload)
+        return handle_pr_feedback(payload, source="review")
     
     # Get issue and comment info (for issue comments)
     issue = payload.get('issue', {})
@@ -280,7 +257,7 @@ def webhook():
     
     # Check if this is a comment on a PR (issue will have pull_request field)
     if issue.get('pull_request'):
-        return handle_pr_comment_on_issue(payload)
+        return handle_pr_feedback(payload, source="comment")
     
     # Check if issue has labels that need re-triage on human comment
     labels = [label['name'] for label in issue.get('labels', [])]
@@ -317,10 +294,16 @@ def webhook():
             github_client.remove_labels(issue_number, ["✓ triaged", "devin-awaiting-feedback"])
             github_client.add_labels(issue_number, ["awaiting-fix-devin"])
             
+            # Clear the old Devin session from state so a new one can be created
+            if state_manager and str(issue_number) in state_manager.state.get("devin_sessions", {}):
+                del state_manager.state["devin_sessions"][str(issue_number)]
+                state_manager.save()
+                print(f"[Issue Comment] Cleared old Devin session for issue #{issue_number}")
+            
             print(f"✓ Updated labels for issue #{issue_number}")
             print(f"  Comment by: {comment_user.get('login')}")
             print(f"  Labels: devin-awaiting-feedback → awaiting-fix-devin")
-            print(f"  Issue will be re-triaged on next orchestrator run")
+            print(f"  Issue will be re-triaged and re-sent to Devin")
             
             return jsonify({
                 'message': 'Labels updated for re-triage',
@@ -342,7 +325,7 @@ def health():
 
 
 def main():
-    global config, github_client, webhook_secret
+    global config, github_client, state_manager, webhook_secret
     
     parser = argparse.ArgumentParser(
         description="GitHub webhook server for issue comment events"
@@ -371,6 +354,7 @@ def main():
         config.target_repo_owner,
         config.target_repo_name
     )
+    state_manager = StateManager(config.state_file)
     webhook_secret = os.getenv("WEBHOOK_SECRET")
     
     print("=" * 50)
