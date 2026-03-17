@@ -36,11 +36,11 @@ def main():
             continue
         
         labels = [label.name for label in issue.labels]
-        if "needs-devin" in labels and "awaiting-fix-devin" in labels:
+        if "needs-devin" in labels and "devin:queued" in labels:
             issues_to_fix.append(issue)
     
     if not issues_to_fix:
-        print("No issues found with 'needs-devin' and 'awaiting-fix-devin' labels")
+        print("No issues found with 'needs-devin' and 'devin:queued' labels")
         return
     
     print(f"Found {len(issues_to_fix)} issues to send to Devin\n")
@@ -69,10 +69,10 @@ def main():
             
             print(f"Created Devin session: {session.url}")
             
-            # Update GitHub labels: remove awaiting-fix-devin, add devin-in-progress
-            github.remove_labels(issue.number, ["awaiting-fix-devin"])
-            github.add_labels(issue.number, ["devin-in-progress"])
-            print(f"  Updated labels: awaiting-fix-devin → devin-in-progress")
+            # Update GitHub labels: remove devin:queued, add devin:in-progress
+            github.remove_labels(issue.number, ["devin:queued"])
+            github.add_labels(issue.number, ["devin:in-progress"])
+            print(f"  Updated labels: devin:queued → devin:in-progress")
             
         except Exception as e:
             print(f"Error: Failed to create Devin session: {e}")

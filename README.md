@@ -100,7 +100,7 @@ This will:
 1. Fetch all open issues (skips PRs)
 2. Score each with LLM (urgency + fixability)
 3. Route and label:
-   - **Devin route**: Labels `needs-devin`, `✓ triaged`, `awaiting-fix-devin`
+   - **Devin route**: Labels `needs-devin`, `✓ triaged`, `devin:queued`
    - **Human route**: Labels `needs-human-review`, `✓ triaged` + posts summary comment
    - **Skip route**: Labels `not-suitable`, `✓ triaged`
 
@@ -111,9 +111,9 @@ python send_to_devin.py
 ```
 
 This will:
-- Find all issues with `needs-devin` + `awaiting-fix-devin` labels
+- Find all issues with `needs-devin` + `devin:queued` labels
 - Create Devin sessions for each
-- Update labels: `awaiting-fix-devin` → `devin-in-progress`
+- Update labels: `devin:queued` → `devin:in-progress`
 
 ### Step 3: Monitor Progress (Optional)
 
@@ -137,7 +137,7 @@ This displays:
 
 **For Devin PRs:**
 1. Comment on the PR in GitHub
-2. Webhook removes `devin-awaiting-feedback` and `✓ triaged`, adds `awaiting-fix-devin`
+2. Webhook removes `devin:awaiting-feedback` and `✓ triaged`, adds `devin:queued`
 3. Webhook clears old Devin session
 4. Run `python orchestrator.py` to re-triage
 5. Run `python send_to_devin.py` to create new Devin session with feedback
@@ -265,12 +265,12 @@ devin-AutofixGit/
 
 | Stage | Labels | Trigger |
 |-------|--------|---------|
-| **Triaged** | `needs-devin`, `✓ triaged`, `awaiting-fix-devin` | Orchestrator triages issue |
-| **Working** | `needs-devin`, `✓ triaged`, `devin-in-progress` | send_to_devin.py creates session |
-| **PR Created** | `needs-devin`, `✓ triaged`, `devin-awaiting-feedback` | Webhook detects PR opened |
-| **Feedback Given** | `needs-devin`, `awaiting-fix-devin` | Webhook detects comment on PR/issue |
-| **Retriaged** | `needs-devin`, `✓ triaged`, `awaiting-fix-devin` | Orchestrator re-triages |
-| **Blocked** | `needs-devin`, `✓ triaged`, `devin-blocked` | Devin encounters error |
+| **Triaged** | `needs-devin`, `✓ triaged`, `devin:queued` | Orchestrator triages issue |
+| **Working** | `needs-devin`, `✓ triaged`, `devin:in-progress` | send_to_devin.py creates session |
+| **PR Created** | `needs-devin`, `✓ triaged`, `devin:awaiting-feedback` | Webhook detects PR opened |
+| **Feedback Given** | `needs-devin`, `devin:queued` | Webhook detects comment on PR/issue |
+| **Retriaged** | `needs-devin`, `✓ triaged`, `devin:queued` | Orchestrator re-triages |
+| **Blocked** | `needs-devin`, `✓ triaged`, `devin:blocked` | Devin encounters error |
 
 ### Human Review Route
 
@@ -284,10 +284,11 @@ devin-AutofixGit/
 
 - `✓ triaged` - Issue has been analyzed by the triage system
 - `needs-devin` - Issue is suitable for Devin to fix
-- `awaiting-fix-devin` - Queued to be sent to Devin
-- `devin-in-progress` - Devin is actively working on this issue
-- `devin-awaiting-feedback` - Devin created a PR, waiting for human review
-- `devin-blocked` - Devin encountered an error or got stuck
+- `devin:queued` - Queued to be sent to Devin
+- `devin:in-progress` - Devin is actively working on this issue
+- `devin:awaiting-feedback` - Devin created a PR, waiting for human review
+- `devin:blocked` - Devin encountered an error or got stuck
+- `devin:complete` - Devin successfully fixed and PR was merged
 - `needs-human-review` - Issue needs human review/clarification
 - `not-suitable` - Issue not suitable for automation
 

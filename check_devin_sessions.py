@@ -59,8 +59,8 @@ A human engineer should review this issue.
 *Devin session: {session.url}*
 """
                 github.create_comment(issue_num, comment)
-                github.remove_labels(issue_num, ["devin-in-progress"])
-                github.add_labels(issue_num, ["devin-blocked"])
+                github.remove_labels(issue_num, ["devin:in-progress"])
+                github.add_labels(issue_num, ["devin:blocked"])
                 print("  Updated GitHub with blocked status")
             
             else:

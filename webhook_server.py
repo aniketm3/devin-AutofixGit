@@ -3,10 +3,10 @@
 GitHub webhook server to automatically handle issue and PR events.
 
 Automated workflows:
-1. PR opened by Devin → Updates issue labels: devin-in-progress → devin-awaiting-feedback
+1. PR opened by Devin → Updates issue labels: devin:in-progress → devin:awaiting-feedback
 2. Human comments on 'needs-human-review' issue → Removes '✓ triaged' for re-triage
-3. Human comments on 'devin-awaiting-feedback' issue → Removes labels for re-triage
-4. Human comments on Devin PR → Updates linked issue to awaiting-fix-devin for re-triage
+3. Human comments on 'devin:awaiting-feedback' issue → Removes labels for re-triage
+4. Human comments on Devin PR → Updates linked issue to devin:queued for re-triage
 
 Setup:
 1. Run this server: python webhook_server.py
@@ -86,13 +86,13 @@ def handle_pr_opened(payload):
         issue = github_client.get_issue(issue_number)
         labels = [label.name for label in issue.labels]
         
-        # Only handle if issue has devin-in-progress (meaning Devin is working on it)
-        if 'devin-in-progress' not in labels:
+        # Only handle if issue has devin:in-progress (meaning Devin is working on it)
+        if 'devin:in-progress' not in labels:
             return jsonify({'message': 'Issue not from Devin workflow'}), 200
         
-        # Update labels: devin-in-progress → devin-awaiting-feedback
-        github_client.remove_labels(issue_number, ["devin-in-progress"])
-        github_client.add_labels(issue_number, ["devin-awaiting-feedback"])
+        # Update labels: devin:in-progress → devin:awaiting-feedback
+        github_client.remove_labels(issue_number, ["devin:in-progress"])
+        github_client.add_labels(issue_number, ["devin:awaiting-feedback"])
         
         # Post comment on issue
         comment = f"""## ✅ Devin completed this issue
@@ -109,7 +109,7 @@ Please review the changes and merge if appropriate.
         github_client.create_comment(issue_number, comment)
         
         print(f"✓ PR #{pr_number} created for issue #{issue_number}")
-        print(f"  Updated labels: devin-in-progress → devin-awaiting-feedback")
+        print(f"  Updated labels: devin:in-progress → devin:awaiting-feedback")
         
         return jsonify({
             'message': 'Labels updated',
@@ -168,20 +168,20 @@ def handle_pr_feedback(payload, source="comment"):
         labels = [label.name for label in linked_issue.labels]
         print(f"[PR Feedback] Issue #{issue_number} labels: {labels}")
         
-        # Only handle if issue has devin-awaiting-feedback or devin-in-progress
-        if 'devin-awaiting-feedback' not in labels and 'devin-in-progress' not in labels:
+        # Only handle if issue has devin:awaiting-feedback or devin:in-progress
+        if 'devin:awaiting-feedback' not in labels and 'devin:in-progress' not in labels:
             print(f"[PR Feedback] Issue not in Devin workflow")
             return jsonify({'message': 'Issue not in Devin workflow'}), 200
         
-        # Remove devin labels and ✓ triaged, add awaiting-fix-devin
+        # Remove devin labels and ✓ triaged, add devin:queued
         labels_to_remove = ["✓ triaged"]
-        if 'devin-awaiting-feedback' in labels:
-            labels_to_remove.append("devin-awaiting-feedback")
-        if 'devin-in-progress' in labels:
-            labels_to_remove.append("devin-in-progress")
+        if 'devin:awaiting-feedback' in labels:
+            labels_to_remove.append("devin:awaiting-feedback")
+        if 'devin:in-progress' in labels:
+            labels_to_remove.append("devin:in-progress")
         
         github_client.remove_labels(issue_number, labels_to_remove)
-        github_client.add_labels(issue_number, ["awaiting-fix-devin"])
+        github_client.add_labels(issue_number, ["devin:queued"])
         
         # Clear the old Devin session from state so a new one can be created
         if state_manager and str(issue_number) in state_manager.state.get("devin_sessions", {}):
@@ -191,7 +191,7 @@ def handle_pr_feedback(payload, source="comment"):
         
         print(f"✓ PR #{pr_number} received feedback for issue #{issue_number}")
         print(f"  Comment by: {comment_user.get('login')}")
-        print(f"  Updated labels to awaiting-fix-devin")
+        print(f"  Updated labels to devin:queued")
         print(f"  Issue will be re-triaged and re-sent to Devin")
         
         return jsonify({
@@ -284,15 +284,15 @@ def webhook():
             print(f"✗ Error removing label from issue #{issue_number}: {e}")
             return jsonify({'error': str(e)}), 500
     
-    # Handle devin-awaiting-feedback issues
-    elif 'devin-awaiting-feedback' in labels:
+    # Handle devin:awaiting-feedback issues
+    elif 'devin:awaiting-feedback' in labels:
         if '✓ triaged' not in labels:
             return jsonify({'message': 'Already unmarked for re-triage'}), 200
         
-        # Remove '✓ triaged' and 'devin-awaiting-feedback', add awaiting-fix-devin
+        # Remove '✓ triaged' and 'devin:awaiting-feedback', add devin:queued
         try:
-            github_client.remove_labels(issue_number, ["✓ triaged", "devin-awaiting-feedback"])
-            github_client.add_labels(issue_number, ["awaiting-fix-devin"])
+            github_client.remove_labels(issue_number, ["✓ triaged", "devin:awaiting-feedback"])
+            github_client.add_labels(issue_number, ["devin:queued"])
             
             # Clear the old Devin session from state so a new one can be created
             if state_manager and str(issue_number) in state_manager.state.get("devin_sessions", {}):
@@ -302,7 +302,7 @@ def webhook():
             
             print(f"✓ Updated labels for issue #{issue_number}")
             print(f"  Comment by: {comment_user.get('login')}")
-            print(f"  Labels: devin-awaiting-feedback → awaiting-fix-devin")
+            print(f"  Labels: devin:awaiting-feedback → devin:queued")
             print(f"  Issue will be re-triaged and re-sent to Devin")
             
             return jsonify({

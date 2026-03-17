@@ -50,9 +50,9 @@ def main():
         # Handle routing
         if result.route == "devin":
             # Label for Devin but don't call it yet
-            labels = ["needs-devin", "✓ triaged", "awaiting-fix-devin"]
+            labels = ["needs-devin", "✓ triaged", "devin:queued"]
             github.add_labels(issue.number, labels)
-            print("  Labeled: needs-devin, ✓ triaged, awaiting-fix-devin")
+            print("  Labeled: needs-devin, ✓ triaged, devin:queued")
         
         elif result.route == "human":
             # Generate summary and questions

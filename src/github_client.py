@@ -116,11 +116,11 @@ class GitHubClient:
             "needs-devin": "0E8A16",  # Dark green
             "needs-human-review": "FBCA04",  # Yellow
             "not-suitable": "D93F0B",  # Red
-            "devin-in-progress": "BFD4F2",  # Light blue
-            "devin-awaiting-feedback": "FFA500",  # Orange
-            "devin-awaiting-user": "0E8A16",  # Dark green
-            "devin-pr-opened": "0E8A16",  # Dark green
-            "devin-blocked": "D93F0B",  # Red
+            "devin:queued": "EDEDED",  # Gray
+            "devin:in-progress": "BFD4F2",  # Light blue
+            "devin:awaiting-feedback": "FFA500",  # Orange
+            "devin:blocked": "D93F0B",  # Red
+            "devin:complete": "0E8A16",  # Dark green
         }
         
         existing_labels = {label.name for label in self.repo.get_labels()}
