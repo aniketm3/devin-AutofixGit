@@ -8,6 +8,63 @@ This system reads GitHub issues from a target repository, scores them for urgenc
 
 **Target Repository**: [aniketm3/demo-targetIssues](https://github.com/aniketm3/demo-targetIssues)
 
+
+### Step 1: Triage Issues
+
+```bash
+# Make sure environment variables are loaded
+export $(grep -v '^#' .env | xargs)
+
+# Run triage
+python orchestrator.py
+```
+
+This will:
+1. Fetch all open issues (skips PRs)
+2. Score each with LLM (urgency + fixability)
+3. Route and label:
+   - **Devin route**: Labels `needs-devin`, `✓ triaged`, `devin:queued`
+   - **Human route**: Labels `needs-human-review`, `✓ triaged` + posts summary comment
+   - **Skip route**: Labels `not-suitable`, `✓ triaged`
+
+### Step 2: Send to Devin
+
+```bash
+python send_to_devin.py
+```
+
+This will:
+- Find all issues with `needs-devin` + `devin:queued` labels
+- Create Devin sessions for each
+- Update labels: `devin:queued` → `devin:in-progress`
+
+### Step 3: Monitor Progress (Optional)
+
+```bash
+python check_devin_sessions.py
+```
+
+This displays:
+- Current status of all Devin sessions
+- PR links if created
+- Handles `devin-blocked` status for errors
+
+**Note**: With webhook enabled, you don't need to run this manually - labels update automatically when PRs are created.
+
+### Step 4: Feedback Loop
+
+**For `needs-human-review` issues:**
+1. Comment on the issue in GitHub
+2. Webhook removes `✓ triaged` automatically
+3. Run `python orchestrator.py` to re-triage with feedback
+
+**For Devin PRs:**
+1. Comment on the PR in GitHub
+2. Webhook removes `devin:awaiting-feedback` and `✓ triaged`, adds `devin:queued`
+3. Webhook clears old Devin session
+4. Run `python orchestrator.py` to re-triage
+5. Run `python send_to_devin.py` to create new Devin session with feedback
+
 ## Setup
 
 ### 1. Create Virtual Environment
@@ -86,62 +143,6 @@ The webhook automatically handles:
 - Comments on issues/PRs → Triggers re-triage
 - Clears old Devin sessions when feedback is provided
 
-### Step 1: Triage Issues
-
-```bash
-# Make sure environment variables are loaded
-export $(grep -v '^#' .env | xargs)
-
-# Run triage
-python orchestrator.py
-```
-
-This will:
-1. Fetch all open issues (skips PRs)
-2. Score each with LLM (urgency + fixability)
-3. Route and label:
-   - **Devin route**: Labels `needs-devin`, `✓ triaged`, `devin:queued`
-   - **Human route**: Labels `needs-human-review`, `✓ triaged` + posts summary comment
-   - **Skip route**: Labels `not-suitable`, `✓ triaged`
-
-### Step 2: Send to Devin
-
-```bash
-python send_to_devin.py
-```
-
-This will:
-- Find all issues with `needs-devin` + `devin:queued` labels
-- Create Devin sessions for each
-- Update labels: `devin:queued` → `devin:in-progress`
-
-### Step 3: Monitor Progress (Optional)
-
-```bash
-python check_devin_sessions.py
-```
-
-This displays:
-- Current status of all Devin sessions
-- PR links if created
-- Handles `devin-blocked` status for errors
-
-**Note**: With webhook enabled, you don't need to run this manually - labels update automatically when PRs are created.
-
-### Step 4: Feedback Loop
-
-**For `needs-human-review` issues:**
-1. Comment on the issue in GitHub
-2. Webhook removes `✓ triaged` automatically
-3. Run `python orchestrator.py` to re-triage with feedback
-
-**For Devin PRs:**
-1. Comment on the PR in GitHub
-2. Webhook removes `devin:awaiting-feedback` and `✓ triaged`, adds `devin:queued`
-3. Webhook clears old Devin session
-4. Run `python orchestrator.py` to re-triage
-5. Run `python send_to_devin.py` to create new Devin session with feedback
-
 ### Seed Demo Issues
 
 Create test issues in the target repository:
@@ -182,21 +183,6 @@ python reset.py --devin
 # Specify repository explicitly
 python reset.py --all --repo aniketm3/demo-targetIssues
 ```
-
-## Issue Templates
-
-The seeding script includes 10 diverse issue templates:
-
-1. **Login endpoint 500 error** - High urgency (9), High fixability (8)
-2. **Input validation** - Medium urgency (6), High fixability (8)
-3. **Database connection pool** - High urgency (8), Medium fixability (7)
-4. **TypeError in pipeline** - High urgency (7), High fixability (9)
-5. **Dark mode feature** - Low urgency (3), Low fixability (4)
-6. **Homepage redesign** - Low urgency (4), Low fixability (2)
-7. **API documentation** - Medium urgency (5), Medium fixability (7)
-8. **Memory leak** - High urgency (9), Medium fixability (6)
-9. **Rate limiting** - High urgency (7), High fixability (7)
-10. **Mobile Safari bug** - Medium urgency (6), High fixability (8)
 
 ## Project Structure
 
@@ -374,51 +360,3 @@ python send_to_devin.py
 # - Re-run orchestrator to re-triage:
 python orchestrator.py
 ```
-
-## Architecture
-
-### Automated Workflows
-
-The system uses webhooks for real-time automation:
-
-1. **PR Creation Detection**: When Devin creates a PR, webhook automatically updates issue labels
-2. **Feedback Loop**: When humans comment on PRs or issues, webhook triggers re-triage
-3. **Session Management**: Old Devin sessions are cleared when feedback is provided
-
-### Scripts
-
-- `orchestrator.py` - Triages issues and assigns labels
-- `send_to_devin.py` - Creates Devin sessions for queued issues
-- `check_devin_sessions.py` - Monitors active Devin sessions (optional)
-- `webhook_server.py` - Handles GitHub events for automation
-- `seed_issues.py` - Creates test issues
-- `reset.py` - Cleans up repository
-
-## Future Enhancements
-
-- Retry logic for failed Devin sessions
-- Monitoring dashboard for stuck issues
-- Alerts for issues requiring attention
-- Periodic health checks for webhook connectivity
-
-## Troubleshooting
-
-### "Error: GITHUB_TOKEN environment variable not set"
-
-Make sure you've:
-1. Created a `.env` file with your token
-2. Loaded the environment variables: `source .env`
-
-### "Error accessing repository"
-
-Check that:
-- The repository exists and you have access
-- Your GitHub token has the correct scopes (`repo` or `public_repo`)
-- The repository format is correct: `owner/repo`
-
-### "Failed to create issue"
-
-Verify that:
-- You have write access to the repository
-- The repository allows issue creation
-- Your token hasn't expired
